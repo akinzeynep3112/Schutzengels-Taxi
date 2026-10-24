@@ -11,7 +11,6 @@ function render(data){
   $("toggle").textContent=data.running?"Alle Timer pausieren":"Alle Timer starten";
   const wrap=$("admin-slots");
   
-  // Wenn die Slots noch gar nicht da sind, einmalig komplett aufbauen
   if(wrap.children.length !== data.slots.length){
     wrap.innerHTML="";
     data.slots.forEach(s=>{
@@ -26,12 +25,15 @@ function render(data){
         e.preventDefault();
         const seconds=parseTime(time.value);
         if(seconds===null){$("message").textContent="Zeit bitte als Stunden:Minuten:Sekunden eingeben, z. B. 23:59:59.";return;}
-        try{const d=await api(`/api/slots/${s.slot}`,{method:"PUT",body:JSON.stringify({name:name.value,remainingSeconds:seconds})});render(d);$("message").textContent=`Platz ${s.slot} gespeichert.`;}catch(err){$("message").textContent=err.message;}
+        try{
+          const d=await api(`/api/slots/${s.slot}`,{method:"PUT",body:JSON.stringify({name:name.value,remainingSeconds:seconds})});
+          render(d);
+          $("message").textContent=`Platz ${s.slot} gespeichert.`;
+        }catch(err){$("message").textContent="Fehler: "+err.message;}
       });
       card.append(heading,form);wrap.append(card);
     });
   } else {
-    // Nur die Zeiten/Anzeigen aktualisieren, ohne die Eingabefelder zu zerstören
     data.slots.forEach(s=>{
       const card=wrap.querySelector(`[data-slot="${s.slot}"]`);
       if(card){
@@ -39,20 +41,43 @@ function render(data){
         if(heading) heading.textContent = fmt(s.remainingSeconds);
         const timeInput = card.querySelector('input[name="time"]');
         const nameInput = card.querySelector('input[name="name"]');
-        // Zeit-Feld nur aktualisieren, wenn der Benutzer gerade nicht darin tippt
-        if(timeInput && document.activeElement !== timeInput && !timeInput.dataset.editing){
+        if(timeInput && document.activeElement !== timeInput){
           timeInput.value = fmt(s.remainingSeconds);
         }
-        if(nameInput && document.activeElement !== nameInput){
-          nameInput.value = s.name;
-        }
+        nameInput.value = s.name;
       }
     });
   }
 }
 
-async function load(){try{render(await api("/api/status"));}catch(e){if(e.message==="Nicht angemeldet")showLogin();else $("message").textContent=e.message;}}
-$("login-form").addEventListener("submit",async e=>{e.preventDefault();$("login-error").textContent="";try{await api("/api/login",{method:"POST",body:JSON.stringify({username:$("username").value,password:$("password").value})});showAdmin();}catch(err){$("login-error").textContent=err.message;}});
-$("toggle").addEventListener("click",async()=>{try{render(await api("/api/toggle",{method:"POST",body:"{}"}));$("message").textContent="Alle Timer wurden aktualisiert.";}catch(e){$("message").textContent=e.message;}});
-$("logout").addEventListener("click",async()=>{try{await api("/api/logout",{method:"POST",body:"{}"});}finally{showLogin();}});
-load();setInterval(()=>{if(!$("admin-panel").classList.contains("hidden"))load();},2000);
+async function load(){
+  try{ render(await api("/api/status")); }
+  catch(e){ if(e.message==="Nicht angemeldet") showLogin(); else $("message").textContent="Fehler: "+e.message; }
+}
+
+$("login-form").addEventListener("submit",async e=>{
+  e.preventDefault();
+  $("login-error").textContent="";
+  try{
+    await api("/api/login",{method:"POST",body:JSON.stringify({username:$("username").value,password:$("password").value})});
+    showAdmin();
+  }catch(err){$("login-error").textContent=err.message;}
+});
+
+$("toggle").addEventListener("click",async()=>{
+  try{
+    const resData = await api("/api/toggle",{method:"POST",body:"{}"});
+    render(resData);
+    $("message").textContent = resData.running ? "Timer gestartet!" : "Timer pausiert!";
+  }catch(e){
+    $("message").textContent = "Fehler beim Starten: " + e.message;
+  }
+});
+
+$("logout").addEventListener("click",async()=>{
+  try{ await api("/api/logout",{method:"POST",body:"{}"}); }
+  finally{ showLogin(); }
+});
+
+load();
+setInterval(()=>{ if(!$("admin-panel").classList.contains("hidden")) load(); }, 2000);
