@@ -1,0 +1,8 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Admin · Schutzengels Taxii</title><link rel="stylesheet" href="/style.css"></head>
+<body><main class="wrap"><header><div class="mark">😇</div><div><h1>Admin-Bereich</h1><p>Schutzengels Taxii</p></div><a class="small-link" href="/">Öffentliche Ansicht</a></header>
+<section id="login-panel" class="panel narrow"><h2>Admin-Anmeldung</h2><form id="login-form"><label>Benutzername<input id="username" autocomplete="username" required></label><label>Passwort<input id="password" type="password" autocomplete="current-password" required></label><button class="primary" type="submit">Anmelden</button><p id="login-error" class="error"></p></form></section>
+<section id="admin-panel" class="panel hidden"><div class="panel-head"><div><h2>Timer verwalten</h2><p class="muted">Start und Pause gelten für alle sieben Timer.</p></div><button id="logout" class="secondary">Abmelden</button></div>
+<button id="toggle" class="primary wide">Alle Timer starten</button><div id="admin-slots" class="admin-slots"></div><p id="message" class="hint"></p></section>
+<footer><a href="/">← Zur öffentlichen Ansicht</a></footer></main><script src="/admin.js"></script></body></html>
