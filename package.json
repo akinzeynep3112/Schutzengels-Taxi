@@ -1,18 +1,18 @@
 {
-  "name": "schutzengels-taxii",
-  "version": "1.1.0",
-  "private": true,
-  "description": "Seven-slot Silkroad Online taxi timer with PostgreSQL persistence",
+  "name": "schutzengels-taxi",
+  "version": "1.0.0",
+  "description": "Schutzengels Taxii Timer",
   "main": "server.js",
-  "scripts": { "start": "node server.js" },
-  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node server.js"
+  },
   "dependencies": {
     "bcryptjs": "^2.4.3",
-    "connect-pg-simple": "^10.0.0",
-    "express": "^4.21.2",
-    "express-rate-limit": "^7.5.0",
-    "express-session": "^1.18.1",
-    "helmet": "^8.0.0",
-    "pg": "^8.13.1"
+    "connect-pg-simple": "^9.0.1",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.2.0",
+    "express-session": "^1.18.0",
+    "helmet": "^7.1.0",
+    "pg": "^8.11.3"
   }
 }
