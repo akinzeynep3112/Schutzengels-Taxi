@@ -8,6 +8,8 @@ const { Pool } = require("pg");
 const path = require("path");
 
 const app = express();
+app.set('trust proxy', 1); // Behebt den Render-Proxy-Fehler
+
 const PORT = process.env.PORT || 3000;
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
@@ -86,7 +88,6 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-// Dateien direkt aus dem Hauptverzeichnis laden
 app.use(express.static(__dirname));
 
 app.get("/api/status", async (_req, res) => {
