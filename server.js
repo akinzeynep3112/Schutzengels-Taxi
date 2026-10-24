@@ -41,10 +41,8 @@ async function initializeDatabase() {
       globally_running BOOLEAN NOT NULL DEFAULT FALSE
     );
   `);
-  // Fehlende Spalten bei bestehenden Tabellen sicher ergänzen
   await pool.query(`ALTER TABLE slots ADD COLUMN IF NOT EXISTS running_since BIGINT;`);
   await pool.query(`ALTER TABLE settings ADD COLUMN IF NOT EXISTS globally_running BOOLEAN NOT NULL DEFAULT FALSE;`);
-
   await pool.query(`
     INSERT INTO settings (id, globally_running) VALUES (1, FALSE)
       ON CONFLICT (id) DO NOTHING;
@@ -74,6 +72,10 @@ app.use(session({
 app.use("/api/login", rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: true, legacyHeaders: false }));
 
 async function getStatus() {
+  await pool.query(`
+    INSERT INTO settings (id, globally_running) VALUES (1, FALSE)
+      ON CONFLICT (id) DO NOTHING;
+  `);
   const settingsResult = await pool.query("SELECT globally_running FROM settings WHERE id=1");
   const globallyRunning = Boolean(settingsResult.rows[0]?.globally_running);
   const now = Math.floor(Date.now() / 1000);
@@ -130,6 +132,10 @@ app.put("/api/slots/:slot", requireAdmin, async (req, res) => {
     return res.status(400).json({ error: "Ungültige Eingabe" });
   }
   try {
+    await pool.query(`
+      INSERT INTO settings (id, globally_running) VALUES (1, FALSE)
+        ON CONFLICT (id) DO NOTHING;
+    `);
     const settings = await pool.query("SELECT globally_running FROM settings WHERE id=1");
     const runningSince = settings.rows[0].globally_running && remainingSeconds > 0 ? Math.floor(Date.now() / 1000) : null;
     await pool.query("UPDATE slots SET name=$1, remaining_seconds=$2, running_since=$3 WHERE slot=$4", [name.trim(), remainingSeconds, runningSince, slot]);
@@ -141,8 +147,12 @@ app.post("/api/toggle", requireAdmin, async (_req, res) => {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    await client.query(`
+      INSERT INTO settings (id, globally_running) VALUES (1, FALSE)
+        ON CONFLICT (id) DO NOTHING;
+    `);
     const settings = await client.query("SELECT globally_running FROM settings WHERE id=1 FOR UPDATE");
-    const current = Boolean(settings.rows[0].globally_running);
+    const current = Boolean(settings.rows[0]?.globally_running);
     const now = Math.floor(Date.now() / 1000);
     if (current) {
       const slots = await client.query("SELECT slot, remaining_seconds, running_since FROM slots FOR UPDATE");
