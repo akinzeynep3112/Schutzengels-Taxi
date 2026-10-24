@@ -32,12 +32,13 @@ const pool = new Pool({
 async function initializeDatabase() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS slots (
-      slot INTEGER PRIMARY KEY CHECK (slot BETWEEN 1 AND 7),
+      slot INTEGER PRIMARY KEY,
       name TEXT NOT NULL DEFAULT '',
-      remaining_seconds INTEGER NOT NULL DEFAULT 0 CHECK (remaining_seconds >= 0)
+      remaining_seconds INTEGER NOT NULL DEFAULT 0,
+      running_since BIGINT
     );
     CREATE TABLE IF NOT EXISTS settings (
-      id INTEGER PRIMARY KEY CHECK (id = 1),
+      id INTEGER PRIMARY KEY,
       globally_running BOOLEAN NOT NULL DEFAULT FALSE
     );
   `);
@@ -82,10 +83,11 @@ async function getStatus() {
   const result = await pool.query("SELECT slot, name, remaining_seconds, running_since FROM slots ORDER BY slot");
   const slots = result.rows.map(s => {
     let remaining = Number(s.remaining_seconds);
-    if (globallyRunning && s.running_since !== null) {
-      remaining = Math.max(0, remaining - (now - Number(s.running_since)));
+    if (globallyRunning && s.running_since !== null && s.running_since !== undefined) {
+      const elapsed = now - Number(s.running_since);
+      remaining = Math.max(0, remaining - elapsed);
     }
-    return { slot: Number(s.slot), name: s.name, remainingSeconds: remaining };
+    return { slot: Number(s.slot), name: s.name || "", remainingSeconds: remaining };
   });
   return { title: "Schutzengels Taxii", running: globallyRunning, slots, serverTime: now };
 }
@@ -99,7 +101,7 @@ app.use(express.static(__dirname));
 
 app.get("/api/status", async (_req, res) => {
   try { res.json(await getStatus()); }
-  catch (err) { console.error("Status error:", err); res.status(500).json({ error: "Status konnte nicht geladen werden" }); }
+  catch (err) { console.error("Status error:", err); res.status(500).json({ error: err.message }); }
 });
 
 app.post("/api/login", async (req, res) => {
@@ -116,7 +118,7 @@ app.post("/api/login", async (req, res) => {
         res.json({ ok: true });
       });
     });
-  } catch (err) { console.error("Login error:", err); res.status(500).json({ error: "Anmeldung fehlgeschlagen" }); }
+  } catch (err) { console.error("Login error:", err); res.status(500).json({ error: err.message }); }
 });
 
 app.post("/api/logout", requireAdmin, (req, res) => {
@@ -140,7 +142,7 @@ app.put("/api/slots/:slot", requireAdmin, async (req, res) => {
     const runningSince = settings.rows[0].globally_running && remainingSeconds > 0 ? Math.floor(Date.now() / 1000) : null;
     await pool.query("UPDATE slots SET name=$1, remaining_seconds=$2, running_since=$3 WHERE slot=$4", [name.trim(), remainingSeconds, runningSince, slot]);
     res.json(await getStatus());
-  } catch (err) { console.error("Slot update error:", err); res.status(500).json({ error: "Timer konnte nicht gespeichert werden" }); }
+  } catch (err) { console.error("Slot update error:", err); res.status(500).json({ error: err.message }); }
 });
 
 app.post("/api/toggle", requireAdmin, async (_req, res) => {
@@ -154,23 +156,35 @@ app.post("/api/toggle", requireAdmin, async (_req, res) => {
     const settings = await client.query("SELECT globally_running FROM settings WHERE id=1 FOR UPDATE");
     const current = Boolean(settings.rows[0]?.globally_running);
     const now = Math.floor(Date.now() / 1000);
+
     if (current) {
-      const slots = await client.query("SELECT slot, remaining_seconds, running_since FROM slots FOR UPDATE");
+      const slots = await client.query("SELECT slot, remaining_seconds, running_since FROM slots");
       for (const s of slots.rows) {
-        const remaining = s.running_since === null ? Number(s.remaining_seconds) : Math.max(0, Number(s.remaining_seconds) - (now - Number(s.running_since)));
+        let remaining = Number(s.remaining_seconds);
+        if (s.running_since !== null && s.running_since !== undefined) {
+          remaining = Math.max(0, remaining - (now - Number(s.running_since)));
+        }
         await client.query("UPDATE slots SET remaining_seconds=$1, running_since=NULL WHERE slot=$2", [remaining, s.slot]);
       }
       await client.query("UPDATE settings SET globally_running=FALSE WHERE id=1");
     } else {
-      await client.query("UPDATE slots SET running_since=CASE WHEN remaining_seconds > 0 THEN $1 ELSE NULL END", [now]);
+      const slots = await client.query("SELECT slot, remaining_seconds FROM slots");
+      for (const s of slots.rows) {
+        if (Number(s.remaining_seconds) > 0) {
+          await client.query("UPDATE slots SET running_since=$1 WHERE slot=$2", [now, s.slot]);
+        } else {
+          await client.query("UPDATE slots SET running_since=NULL WHERE slot=$2", [null, s.slot]);
+        }
+      }
       await client.query("UPDATE settings SET globally_running=TRUE WHERE id=1");
     }
+
     await client.query("COMMIT");
     res.json(await getStatus());
   } catch (err) {
     await client.query("ROLLBACK");
     console.error("Toggle error:", err);
-    res.status(500).json({ error: "Timer konnte nicht gestartet/pausiert werden" });
+    res.status(500).json({ error: err.message });
   } finally { client.release(); }
 });
 
