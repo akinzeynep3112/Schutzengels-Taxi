@@ -21,8 +21,6 @@ if (!ADMIN_USERNAME || !ADMIN_PASSWORD || !SESSION_SECRET || !DATABASE_URL) {
 
 const pool = new Pool({
   connectionString: DATABASE_URL,
-  // Hosted PostgreSQL providers typically require TLS. If the provider's URL
-  // already specifies SSL settings, node-postgres will use those as well.
   ssl: process.env.PGSSLMODE === "disable" ? false : { rejectUnauthorized: false },
   max: 5,
   idleTimeoutMillis: 30000,
@@ -51,6 +49,8 @@ async function initializeDatabase() {
 
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json({ limit: "20kb" }));
+app.use(express.urlencoded({ extended: true }));
+
 app.use(session({
   store: new pgSession({ pool, tableName: "user_sessions", createTableIfMissing: true }),
   name: "taxii_admin",
@@ -86,7 +86,9 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-app.use(express.static(path.join(__dirname, "public")));
+// Dateien direkt aus dem Hauptverzeichnis laden
+app.use(express.static(__dirname));
+
 app.get("/api/status", async (_req, res) => {
   try { res.json(await getStatus()); }
   catch (err) { console.error("Status error:", err); res.status(500).json({ error: "Status konnte nicht geladen werden" }); }
@@ -95,8 +97,7 @@ app.get("/api/status", async (_req, res) => {
 app.post("/api/login", async (req, res) => {
   try {
     const { username, password } = req.body || {};
-    if (typeof username !== "string" || typeof password !== "string" ||
-        username !== ADMIN_USERNAME || !(await bcrypt.compare(password, await bcrypt.hash(ADMIN_PASSWORD, 10)))) {
+    if (username !== ADMIN_USERNAME || password !== ADMIN_PASSWORD) {
       return res.status(401).json({ error: "Benutzername oder Passwort falsch" });
     }
     req.session.regenerate(err => {
@@ -157,8 +158,8 @@ app.post("/api/toggle", requireAdmin, async (_req, res) => {
   } finally { client.release(); }
 });
 
-app.get("/admin", (_req, res) => res.sendFile(path.join(__dirname, "public", "admin.html")));
-app.get("*", (_req, res) => res.sendFile(path.join(__dirname, "public", "index.html")));
+app.get("/admin", (_req, res) => res.sendFile(path.join(__dirname, "admin.html")));
+app.get("*", (_req, res) => res.sendFile(path.join(__dirname, "index.html")));
 
 initializeDatabase().then(() => {
   app.listen(PORT, () => console.log(`Schutzengels Taxii running on port ${PORT}`));
