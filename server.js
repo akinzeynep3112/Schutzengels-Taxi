@@ -8,7 +8,7 @@ const { Pool } = require("pg");
 const path = require("path");
 
 const app = express();
-app.set('trust proxy', 1); // Behebt den Render-Proxy-Fehler
+app.set('trust proxy', 1);
 
 const PORT = process.env.PORT || 3000;
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME;
@@ -17,7 +17,7 @@ const SESSION_SECRET = process.env.SESSION_SECRET;
 const DATABASE_URL = process.env.DATABASE_URL;
 
 if (!ADMIN_USERNAME || !ADMIN_PASSWORD || !SESSION_SECRET || !DATABASE_URL) {
-  console.error("Missing required environment variables: ADMIN_USERNAME, ADMIN_PASSWORD, SESSION_SECRET, DATABASE_URL.");
+  console.error("Missing required environment variables.");
   process.exit(1);
 }
 
@@ -34,13 +34,18 @@ async function initializeDatabase() {
     CREATE TABLE IF NOT EXISTS slots (
       slot INTEGER PRIMARY KEY CHECK (slot BETWEEN 1 AND 7),
       name TEXT NOT NULL DEFAULT '',
-      remaining_seconds INTEGER NOT NULL DEFAULT 0 CHECK (remaining_seconds >= 0),
-      running_since BIGINT
+      remaining_seconds INTEGER NOT NULL DEFAULT 0 CHECK (remaining_seconds >= 0)
     );
     CREATE TABLE IF NOT EXISTS settings (
       id INTEGER PRIMARY KEY CHECK (id = 1),
       globally_running BOOLEAN NOT NULL DEFAULT FALSE
     );
+  `);
+  // Fehlende Spalten bei bestehenden Tabellen sicher ergänzen
+  await pool.query(`ALTER TABLE slots ADD COLUMN IF NOT EXISTS running_since BIGINT;`);
+  await pool.query(`ALTER TABLE settings ADD COLUMN IF NOT EXISTS globally_running BOOLEAN NOT NULL DEFAULT FALSE;`);
+
+  await pool.query(`
     INSERT INTO settings (id, globally_running) VALUES (1, FALSE)
       ON CONFLICT (id) DO NOTHING;
   `);
