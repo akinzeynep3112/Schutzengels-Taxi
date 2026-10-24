@@ -173,7 +173,7 @@ app.post("/api/toggle", requireAdmin, async (_req, res) => {
         if (Number(s.remaining_seconds) > 0) {
           await client.query("UPDATE slots SET running_since=$1 WHERE slot=$2", [now, s.slot]);
         } else {
-          await client.query("UPDATE slots SET running_since=NULL WHERE slot=$2", [null, s.slot]);
+          await client.query("UPDATE slots SET running_since=NULL WHERE slot=$1", [s.slot]);
         }
       }
       await client.query("UPDATE settings SET globally_running=TRUE WHERE id=1");
